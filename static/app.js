@@ -11,7 +11,7 @@ document.querySelectorAll('.tab').forEach(button => {
     button.addEventListener('click', () => {
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
         document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-        
+
         button.classList.add('active');
         document.getElementById(button.dataset.target).classList.add('active');
     });
@@ -44,6 +44,17 @@ fileInput.addEventListener('change', () => {
 });
 
 async function handleFile(file) {
+    // Check if API key is provided
+    const apiKeyInput = document.getElementById('api-key-input');
+    const apiKey = apiKeyInput ? apiKeyInput.value.trim() : '';
+
+    if (!apiKey) {
+        errorMsg.textContent = "Please enter your Gemini API Key before uploading.";
+        errorMsg.classList.remove('hidden');
+        if (apiKeyInput) apiKeyInput.focus();
+        return;
+    }
+
     // Reset UI
     errorMsg.classList.add('hidden');
     results.classList.add('hidden');
@@ -51,6 +62,7 @@ async function handleFile(file) {
 
     const formData = new FormData();
     formData.append('file', file);
+    formData.append('api_key', apiKey);
 
     try {
         const response = await fetch('/api/parse-cv', {
@@ -65,7 +77,7 @@ async function handleFile(file) {
         }
 
         renderResults(data);
-        
+
     } catch (err) {
         errorMsg.textContent = err.message;
         errorMsg.classList.remove('hidden');

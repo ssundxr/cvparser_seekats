@@ -36,8 +36,15 @@ body {
 }
 
 @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(20px); }
-    to { opacity: 1; transform: translateY(0); }
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 header {
@@ -56,6 +63,45 @@ header p {
     font-weight: 300;
 }
 
+.api-key-section {
+    background: var(--surface);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.api-key-section label {
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+#api-key-input {
+    padding: 1rem;
+    font-family: inherit;
+    font-size: 1rem;
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    outline: none;
+    transition: var(--transition);
+}
+
+#api-key-input:focus {
+    border-color: var(--accent);
+}
+
+.api-help {
+    font-size: 0.85rem;
+    color: #666;
+}
+
+.api-help a {
+    color: var(--accent);
+    font-weight: 600;
+}
+
 .upload-zone {
     background: var(--surface);
     border: 2px dashed var(--border-color);
@@ -68,10 +114,11 @@ header p {
     overflow: hidden;
 }
 
-.upload-zone:hover, .upload-zone.dragover {
+.upload-zone:hover,
+.upload-zone.dragover {
     border-color: var(--accent);
     transform: translateY(-2px);
-    box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
 }
 
 .upload-content {
@@ -129,8 +176,13 @@ header p {
 }
 
 @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
 }
 
 .error {
@@ -140,14 +192,14 @@ header p {
     border-radius: 8px;
     font-weight: 600;
     color: #cc0000;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
 }
 
 /* Results */
 .results-container {
     background: var(--surface);
     border-radius: 16px;
-    box-shadow: 0 20px 40px rgba(0,0,0,0.03);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.03);
     overflow: hidden;
     animation: fadeIn 0.6s ease;
 }
@@ -240,7 +292,7 @@ pre {
 
 .item-card:hover {
     border-color: #ccc;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.02);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.02);
 }
 
 .item-title {

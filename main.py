@@ -3,7 +3,7 @@ import json
 import fitz  # PyMuPDF
 import docx
 import google.generativeai as genai
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi import FastAPI, File, UploadFile, HTTPException, Form
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from typing import List, Optional
@@ -12,11 +12,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 app = FastAPI(title="CV Parser MVP")
-
-# Configure Gemini
-api_key = os.getenv("GEMINI_API_KEY")
-if api_key:
-    genai.configure(api_key=api_key)
 
 # Define the precise structured output using Pydantic
 class Experience(BaseModel):
@@ -64,13 +59,13 @@ def extract_text_from_docx(file_bytes: bytes) -> str:
         raise ValueError(f"Failed to parse DOCX: {str(e)}")
 
 @app.post("/api/parse-cv")
-async def parse_cv(file: UploadFile = File(...)):
+async def parse_cv(file: UploadFile = File(...), api_key: str = Form(...)):
     # Check API key inside route so we can show proper error if missing
-    current_key = os.getenv("GEMINI_API_KEY")
-    if not current_key or current_key == "your_gemini_api_key_here":
-        raise HTTPException(status_code=500, detail="GEMINI_API_KEY is not configured in .env file.")
+    current_key = api_key.strip() if api_key else ""
+    if not current_key:
+        raise HTTPException(status_code=400, detail="Gemini API Key is required.")
     
-    # Configure each time since user might update .env while server is running
+    # Configure each time with user's key
     genai.configure(api_key=current_key)
     
     content = await file.read()
