@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI CV Parser MVP</title>
+    <!-- Use a premium modern font like Outfit -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>CV Parser</h1>
+            <p>Intelligence layered. Upload a PDF or DOCX.</p>
+        </header>
+
+        <div class="upload-zone" id="drop-zone">
+            <input type="file" id="file-input" accept=".pdf,.docx" hidden>
+            <div class="upload-content">
+                <svg class="upload-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+                <div class="upload-text">Drag & drop or <span class="browse-link">browse</span></div>
+            </div>
+        </div>
+        
+        <div id="loading" class="hidden">
+            <div class="spinner"></div>
+            <p>Scanning intelligence...</p>
+        </div>
+
+        <div id="error-message" class="error hidden"></div>
+
+        <div id="results" class="results-container hidden">
+            <div class="tabs">
+                <button class="tab active" data-target="parsed">Structured View</button>
+                <button class="tab" data-target="json">Raw JSON</button>
+            </div>
+            
+            <div id="parsed" class="tab-content active view-section">
+                <!-- Injected via JS -->
+            </div>
+            <div id="json" class="tab-content view-section">
+                <pre><code id="json-output"></code></pre>
+            </div>
+        </div>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>
