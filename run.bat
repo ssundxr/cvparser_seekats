@@ -1,4 +1,4 @@
 @echo off
 echo Starting AI CV Parser Server...
 call venv\Scripts\activate
-uvicorn main:app --reload
+uvicorn main:app --reload --port 8001

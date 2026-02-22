@@ -6,3 +6,8 @@ python-docx
 google-generativeai
 pydantic
 python-dotenv
+pdfplumber
+pytesseract
+spacy
+instructor
+Pillow

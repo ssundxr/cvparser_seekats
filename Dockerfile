@@ -4,9 +4,11 @@ FROM python:3.11-slim
 # Set the working directory
 WORKDIR /app
 
-# Install system dependencies (needed by some PDF libraries)
+# Install system dependencies (needed by some PDF libraries and OCR)
 RUN apt-get update && apt-get install -y \
     build-essential \
+    tesseract-ocr \
+    libtesseract-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install
