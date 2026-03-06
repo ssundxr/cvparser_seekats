@@ -6,6 +6,23 @@ const errorMsg = document.getElementById('error-message');
 const parsedDiv = document.getElementById('parsed');
 const jsonOutput = document.getElementById('json-output');
 
+const uploadView = document.getElementById('upload-view');
+const splitView = document.getElementById('split-view');
+const uploadNewBtn = document.getElementById('upload-new-btn');
+const pdfContainer = document.getElementById('pdf-container');
+const docxContainer = document.getElementById('docx-container');
+
+let currentFile = null;
+let currentPdf = null;
+
+// Extracted semantic strings to highlight
+let highlightData = {
+    personal: [],
+    edu: [],
+    exp: [],
+    skills: []
+};
+
 // Tabs
 document.querySelectorAll('.tab').forEach(button => {
     button.addEventListener('click', () => {
@@ -43,8 +60,21 @@ fileInput.addEventListener('change', () => {
     }
 });
 
+uploadNewBtn.addEventListener('click', () => {
+    splitView.classList.remove('active');
+    setTimeout(() => {
+        splitView.classList.add('hidden');
+        uploadView.classList.remove('hidden');
+        uploadView.classList.add('active');
+        fileInput.value = '';
+        pdfContainer.innerHTML = '';
+        docxContainer.innerHTML = '';
+        errorMsg.classList.add('hidden');
+    }, 500); // Wait for fade out
+});
+
 async function handleFile(file) {
-    // Check if API key is provided
+    currentFile = file;
     const apiKeyInput = document.getElementById('api-key-input');
     const apiKey = apiKeyInput ? apiKeyInput.value.trim() : '';
 
@@ -57,8 +87,17 @@ async function handleFile(file) {
 
     // Reset UI
     errorMsg.classList.add('hidden');
-    results.classList.add('hidden');
-    loading.classList.remove('hidden');
+    uploadView.classList.remove('active');
+    uploadView.classList.add('hidden');
+    splitView.classList.remove('hidden');
+    splitView.classList.add('active');
+
+    // Show Loading in results area
+    parsedDiv.innerHTML = '<div style="display:flex; flex-direction:column; align-items:center; opacity:0.6; padding: 4rem;"> <div class="spinner"></div><p style="margin-top:1rem;">Processing document...</p></div>';
+    jsonOutput.textContent = 'Loading...';
+
+    // Begin rendering the document visually on the left side
+    renderDocument(file);
 
     const formData = new FormData();
     formData.append('file', file);
@@ -77,17 +116,169 @@ async function handleFile(file) {
         }
 
         renderResults(data);
+        applyHighlights(data);
 
     } catch (err) {
-        errorMsg.textContent = err.message;
-        errorMsg.classList.remove('hidden');
-    } finally {
-        loading.classList.add('hidden');
-        // Clear input to allow re-uploading the same file
-        fileInput.value = '';
+        parsedDiv.innerHTML = `<div class="error" style="margin-top: 2rem;">${err.message}</div>`;
+        jsonOutput.textContent = JSON.stringify({ error: err.message }, null, 2);
     }
 }
 
+async function renderDocument(file) {
+    pdfContainer.innerHTML = '';
+    docxContainer.innerHTML = '';
+
+    if (file.name.toLowerCase().endsWith('.pdf')) {
+        pdfContainer.classList.remove('hidden');
+        docxContainer.classList.add('hidden');
+
+        try {
+            const fileReader = new FileReader();
+            fileReader.onload = async function () {
+                const typedarray = new Uint8Array(this.result);
+                currentPdf = await pdfjsLib.getDocument(typedarray).promise;
+
+                for (let pageNum = 1; pageNum <= currentPdf.numPages; pageNum++) {
+                    await renderPdfPage(pageNum);
+                }
+            };
+            fileReader.readAsArrayBuffer(file);
+        } catch (error) {
+            console.error('Error rendering PDF:', error);
+            pdfContainer.innerHTML = '<div class="error">Error rendering PDF visually.</div>';
+        }
+    } else {
+        // Fallback for DOCX visual
+        pdfContainer.classList.add('hidden');
+        docxContainer.classList.remove('hidden');
+        docxContainer.innerHTML = '<div style="padding: 2rem; color: #666;">Document uploaded successfully. Parsed data displayed on the right panel.</div>';
+    }
+}
+
+async function renderPdfPage(pageNum) {
+    const page = await currentPdf.getPage(pageNum);
+
+    // Scale the PDF to fit the container width somewhat responsively
+    const containerWidth = document.querySelector('.left-pane').clientWidth - 40; // padding minus
+    const unscaledViewport = page.getViewport({ scale: 1.0 });
+    const scale = containerWidth / unscaledViewport.width;
+    const viewport = page.getViewport({ scale: scale > 1.5 ? 1.5 : scale }); // Cap scale
+
+    // Create wrapper
+    const wrapper = document.createElement('div');
+    wrapper.className = 'pdf-page-wrapper';
+    wrapper.style.width = `${viewport.width}px`;
+    wrapper.style.height = `${viewport.height}px`;
+
+    // Create canvas
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    canvas.height = viewport.height;
+    canvas.width = viewport.width;
+    wrapper.appendChild(canvas);
+
+    // Create text layer
+    const textLayerDiv = document.createElement('div');
+    textLayerDiv.className = 'textLayer';
+    textLayerDiv.style.width = `${viewport.width}px`;
+    textLayerDiv.style.height = `${viewport.height}px`;
+    wrapper.appendChild(textLayerDiv);
+
+    pdfContainer.appendChild(wrapper);
+
+    // Render Canvas
+    const renderContext = {
+        canvasContext: context,
+        viewport: viewport
+    };
+    await page.render(renderContext).promise;
+
+    // Render Text Layer
+    const textContent = await page.getTextContent();
+    await pdfjsLib.renderTextLayer({
+        textContentSource: textContent,
+        container: textLayerDiv,
+        viewport: viewport,
+        textDivs: []
+    }).promise;
+}
+
+function extractStringsToHighlight(data) {
+    highlightData = { personal: [], edu: [], exp: [], skills: [] };
+
+    // Personal
+    if (data.name) highlightData.personal.push(data.name);
+    if (data.contact_info) {
+        if (data.contact_info.email) highlightData.personal.push(data.contact_info.email);
+        if (data.contact_info.phone) highlightData.personal.push(data.contact_info.phone);
+    }
+
+    // Education
+    if (data.education) {
+        data.education.forEach(edu => {
+            if (edu.institution) highlightData.edu.push(edu.institution);
+            if (edu.degree) highlightData.edu.push(edu.degree);
+        });
+    }
+
+    // Experience
+    if (data.experience) {
+        data.experience.forEach(exp => {
+            if (exp.company) highlightData.exp.push(exp.company);
+            if (exp.role) highlightData.exp.push(exp.role);
+        });
+    }
+
+    // Skills
+    if (data.skills) {
+        data.skills.forEach(skill => highlightData.skills.push(skill));
+    }
+}
+
+function applyHighlights(data) {
+    extractStringsToHighlight(data);
+
+    // Give the PDF text layer a tiny bit of time to ensure DOM elements are fully painted
+    setTimeout(() => {
+        const textLayers = document.querySelectorAll('.textLayer');
+
+        textLayers.forEach(layer => {
+            const instance = new Mark(layer);
+
+            const markOptions = {
+                accuracy: "partially",
+                acrossElements: true,
+                separateWordSearch: false,
+                diacritics: true,
+                ignoreJoiners: true
+            };
+
+            // Filter function to remove short strings or essentially empty strings
+            const filterTerms = (arr) => arr.filter(term => term && term.trim().length > 3);
+
+            // Highlight Education
+            filterTerms(highlightData.edu).forEach(term => {
+                instance.mark(term, { ...markOptions, className: 'hl-edu' });
+            });
+
+            // Highlight Experience
+            filterTerms(highlightData.exp).forEach(term => {
+                instance.mark(term, { ...markOptions, className: 'hl-exp' });
+            });
+
+            // Highlight Personal
+            filterTerms(highlightData.personal).forEach(term => {
+                instance.mark(term, { ...markOptions, className: 'hl-personal' });
+            });
+
+            // Highlight Skills
+            filterTerms(highlightData.skills).forEach(term => {
+                // Skills usually are single words, maybe 'exactly' is better here but for PDF 'partially' works better with spaces
+                instance.mark(term, { ...markOptions, className: 'hl-skills' });
+            });
+        });
+    }, 1000);
+}
 function renderResults(data) {
     // Render Raw JSON
     jsonOutput.textContent = JSON.stringify(data, null, 2);
@@ -148,5 +339,4 @@ function renderResults(data) {
     }
 
     parsedDiv.innerHTML = html;
-    results.classList.remove('hidden');
 }

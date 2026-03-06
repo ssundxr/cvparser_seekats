@@ -3,10 +3,6 @@ import json
 import fitz  # PyMuPDF
 import docx
 import pdfplumber
-import pytesseract
-import spacy
-import instructor
-import google.generativeai as genai
 from fastapi import FastAPI, File, UploadFile, HTTPException, Form
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -15,20 +11,40 @@ from dotenv import load_dotenv
 from io import BytesIO
 from PIL import Image
 
+# Optional imports with graceful fallback
+try:
+    import pytesseract
+    HAS_OCR = True
+except:
+    HAS_OCR = False
+    print("Warning: pytesseract not available. OCR will be disabled.")
+
+try:
+    import spacy
+    try:
+        nlp = spacy.load("en_core_web_sm")
+        HAS_SPACY = True
+    except OSError:
+        nlp = None
+        HAS_SPACY = False
+        print("Warning: spacy 'en_core_web_sm' model not found. NER pre-processing will be skipped.")
+except:
+    nlp = None
+    HAS_SPACY = False
+    print("Warning: spacy not available. NER pre-processing will be skipped.")
+
+try:
+    import instructor
+    import google.generativeai as genai
+    HAS_INSTRUCTOR = True
+except:
+    import google.generativeai as genai
+    HAS_INSTRUCTOR = False
+    print("Warning: instructor library not available. Using standard Gemini API.")
+
 load_dotenv()
 
 app = FastAPI(title="CV Parser MVP")
-
-# Check if Tesseract is easily accessible. If not installed/in PATH, it might crash later, 
-# but we shouldn't fail at startup unless we really have to.
-# pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe' # Default windows path if needed
-
-# Try loading spacy, fallback gracefully if not downloaded yet
-try:
-    nlp = spacy.load("en_core_web_sm")
-except OSError:
-    nlp = None
-    print("Warning: spacy 'en_core_web_sm' model not found. NER pre-processing will be skipped.")
 
 # Define the precise structured output using Pydantic
 class Experience(BaseModel):
@@ -58,7 +74,7 @@ class CVData(BaseModel):
 
 def extract_entities(text: str) -> dict:
     """Uses NLP to extract ORG, PERSON, and GPE entities as hints for the LLM."""
-    if not nlp:
+    if not HAS_SPACY or not nlp:
         return {"ORG": [], "PERSON": [], "GPE": []}
     
     # Process the first 10,000 characters to avoid huge CPU overhead on large docs
@@ -91,6 +107,9 @@ def extract_text_from_pdf(file_bytes: bytes) -> str:
 
     # Strategy 2: OCR Fallback if text is unusually sparse (e.g. < 50 chars indicates an image PDF)
     if len(text.strip()) < 50:
+        if not HAS_OCR:
+            raise ValueError("Document appears to be scanned/image-based but OCR (pytesseract) is not available.")
+        
         print("Scanned document detected. Initiating OCR fallback...")
         text = ""
         try:
@@ -157,35 +176,101 @@ async def parse_cv(file: UploadFile = File(...), api_key: str = Form(...)):
     People found: {', '.join(entities['PERSON']) if entities['PERSON'] else 'None identified'}
     """
 
-    # Call Gemini API with Instructor for Guaranteed Structured Output
+    # Call Gemini API with or without Instructor for Structured Output
     try:
-        # We wrap the generative model with instructor
-        base_model = genai.GenerativeModel('gemini-2.5-flash')
-        client = instructor.from_gemini(
-            client=base_model,
-            mode=instructor.Mode.GEMINI_JSON
-        )
-        
-        prompt = f"""
-        Extract the following information from the resume text provided below. 
-        Ensure extreme precision and accuracy. If a piece of information is missing, output an empty string or null.
-        For skills, extract a comprehensive list of distinct technical and soft skills.
-        
-        {entity_context}
-        
-        Resume text:
-        {text}
-        """
+        if HAS_INSTRUCTOR:
+            # Use instructor for guaranteed structured output
+            base_model = genai.GenerativeModel('gemini-2.5-flash')
+            client = instructor.from_gemini(
+                client=base_model,
+                mode=instructor.Mode.GEMINI_JSON
+            )
+            
+            prompt = f"""
+            Extract the following information from the resume text provided below. 
+            Ensure extreme precision and accuracy. If a piece of information is missing, output an empty string or null.
+            For skills, extract a comprehensive list of distinct technical and soft skills.
+            
+            {entity_context}
+            
+            Resume text:
+            {text}
+            """
 
-        # Using Instructor to enforce the CVData schema directly
-        parsed_data = client.chat.completions.create(
-            messages=[{"role": "user", "content": prompt}],
-            response_model=CVData,
-            max_retries=3 # Instructor automatically retries if JSON is malformed
-        )
-        
-        # instructor returns the parsed Pydantic model directly
-        return parsed_data.model_dump()
+            # Using Instructor to enforce the CVData schema directly
+            parsed_data = client.chat.completions.create(
+                messages=[{"role": "user", "content": prompt}],
+                response_model=CVData,
+                max_retries=3
+            )
+            
+            return parsed_data.model_dump()
+        else:
+            # Use standard Gemini API with JSON mode
+            model = genai.GenerativeModel(
+                'gemini-2.5-flash',
+                generation_config={
+                    "response_mime_type": "application/json",
+                    "response_schema": {
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string"},
+                            "contact_info": {
+                                "type": "object",
+                                "properties": {
+                                    "email": {"type": "string"},
+                                    "phone": {"type": "string"},
+                                    "linkedin": {"type": "string"},
+                                    "github": {"type": "string"}
+                                }
+                            },
+                            "education": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "institution": {"type": "string"},
+                                        "degree": {"type": "string"},
+                                        "graduation_year": {"type": "string"}
+                                    }
+                                }
+                            },
+                            "experience": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "company": {"type": "string"},
+                                        "role": {"type": "string"},
+                                        "start_date": {"type": "string"},
+                                        "end_date": {"type": "string"},
+                                        "description": {"type": "string"}
+                                    }
+                                }
+                            },
+                            "skills": {
+                                "type": "array",
+                                "items": {"type": "string"}
+                            }
+                        },
+                        "required": ["name", "contact_info", "education", "experience", "skills"]
+                    }
+                }
+            )
+            
+            prompt = f"""
+            Extract the following information from the resume text provided below and return it as JSON.
+            Ensure extreme precision and accuracy. If a piece of information is missing, use empty string or empty array.
+            For skills, extract a comprehensive list of distinct technical and soft skills.
+            
+            {entity_context}
+            
+            Resume text:
+            {text}
+            """
+            
+            response = model.generate_content(prompt)
+            return json.loads(response.text)
         
     except Exception as e:
         print(f"AI Parsing error detail: {str(e)}")
