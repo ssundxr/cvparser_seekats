@@ -1,13 +1,15 @@
 fastapi
-uvicorn
+uvicorn[standard]
 python-multipart
 pymupdf
 python-docx
 google-generativeai
 pydantic
+pydantic-settings
 python-dotenv
 pdfplumber
 pytesseract
 spacy
 instructor
 Pillow
+PyJWT
