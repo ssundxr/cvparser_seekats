@@ -53,12 +53,31 @@ def parse_docx(file_bytes: bytes) -> str:
         )
 
     try:
+        from docx.oxml.table import CT_Tbl
+        from docx.oxml.text.paragraph import CT_P
+        from docx.table import Table
+        from docx.text.paragraph import Paragraph
+
         document = python_docx.Document(BytesIO(file_bytes))
-        text = "\n".join(
-            paragraph.text
-            for paragraph in document.paragraphs
-            if paragraph.text.strip()  # skip blank paragraphs
-        )
+        
+        text_parts = []
+        for child in document.element.body.iterchildren():
+            if isinstance(child, CT_P):
+                p = Paragraph(child, document)
+                if p.text.strip():
+                    text_parts.append(p.text.strip())
+            elif isinstance(child, CT_Tbl):
+                t = Table(child, document)
+                for row in t.rows:
+                    row_data = [
+                        cell.text.replace("\n", " ").strip() 
+                        for cell in row.cells 
+                        if cell.text.strip()
+                    ]
+                    if row_data:
+                        text_parts.append(" | ".join(row_data))
+                        
+        text = "\n".join(text_parts)
     except Exception as exc:
         logger.error("python-docx failed to parse DOCX: %s", exc)
         raise CorruptedDocumentError(
